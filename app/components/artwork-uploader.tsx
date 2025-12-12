@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 
 interface ArtworkData {
@@ -42,24 +42,30 @@ export default function ArtworkUploader({
   const [preview, setPreview] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [captureMode, setCaptureMode] = useState<'file' | 'camera'>('file');
+  const [isListening, setIsListening] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [streaming, setStreaming] = useState(false);
 
+  // Auto-start camera when component mounts
+  useEffect(() => {
+    startCamera();
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       setError('Please select an image file');
       return;
     }
 
-    // Validate file size (10MB)
     if (file.size > 10 * 1024 * 1024) {
       setError('Image must be smaller than 10MB');
       return;
@@ -70,21 +76,26 @@ export default function ArtworkUploader({
       const result = e.target?.result as string;
       setPreview(result);
       setError(null);
+      stopCamera(); // Stop camera when image is selected
+      analyzeArtwork(result); // Auto-analyze uploaded image
     };
     reader.readAsDataURL(file);
+  };
+
+  const openGallery = () => {
+    fileInputRef.current?.click();
   };
 
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: 1280, height: 720 },
+        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
       });
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        await videoRef.current.play();
         setStreaming(true);
-        setCaptureMode('camera');
         setError(null);
       }
     } catch (err) {
@@ -110,14 +121,16 @@ export default function ArtworkUploader({
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(video, 0, 0);
-      const imageData = canvas.toDataURL('image/jpeg', 0.9);
+      const imageData = canvas.toDataURL('image/jpeg', 0.95);
       setPreview(imageData);
       stopCamera();
+      analyzeArtwork(imageData); // Auto-analyze captured photo
     }
   };
 
-  const analyzeArtwork = async () => {
-    if (!preview) return;
+  const analyzeArtwork = async (imageData?: string) => {
+    const dataToAnalyze = imageData || preview;
+    if (!dataToAnalyze) return;
 
     setAnalyzing(true);
     setError(null);
@@ -126,7 +139,7 @@ export default function ArtworkUploader({
       const response = await fetch('/api/analyze-artwork', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageData: preview }),
+        body: JSON.stringify({ imageData: dataToAnalyze }),
       });
 
       const data = await response.json();
@@ -144,143 +157,123 @@ export default function ArtworkUploader({
     }
   };
 
-  const reset = () => {
-    setPreview(null);
-    setError(null);
-    stopCamera();
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+  const toggleVoiceListening = () => {
+    setIsListening(!isListening);
+    // TODO: Implement voice recognition
+    // For now, just toggle the visual state
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto p-6 bg-white dark:bg-zinc-900 rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold mb-4 text-zinc-900 dark:text-zinc-50">
-        Upload Artwork
-      </h2>
-
-      {/* Mode Selection */}
-      {!preview && !streaming && (
-        <div className="flex gap-4 mb-6">
-          <button
-            onClick={() => setCaptureMode('file')}
-            className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors ${
-              captureMode === 'file'
-                ? 'bg-blue-600 text-white'
-                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-            }`}
-            disabled={disabled}
-          >
-            📁 Upload File
-          </button>
-          <button
-            onClick={() => {
-              setCaptureMode('camera');
-              startCamera();
-            }}
-            className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors ${
-              captureMode === 'camera'
-                ? 'bg-blue-600 text-white'
-                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-            }`}
-            disabled={disabled}
-          >
-            📷 Use Camera
-          </button>
-        </div>
-      )}
-
-      {/* File Upload */}
-      {captureMode === 'file' && !preview && !streaming && (
-        <div className="border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg p-8 text-center">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileSelect}
-            className="hidden"
-            disabled={disabled}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={disabled}
-          >
-            Select Image
-          </button>
-          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-            or drag and drop an image here
-          </p>
-          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
-            Supports JPEG, PNG, WebP (max 10MB)
-          </p>
-        </div>
-      )}
-
-      {/* Camera View */}
-      {streaming && (
-        <div className="relative">
-          <video
-            ref={videoRef}
-            className="w-full rounded-lg"
-            playsInline
-          />
-          <div className="flex gap-4 mt-4">
-            <button
-              onClick={capturePhoto}
-              className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-            >
-              📸 Capture Photo
-            </button>
-            <button
-              onClick={stopCamera}
-              className="flex-1 py-3 px-4 bg-zinc-600 text-white rounded-lg font-medium hover:bg-zinc-700 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+    <div className="fixed inset-0 bg-black">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
+      
+      {/* Camera View - Always rendered, full screen */}
+      <video
+        ref={videoRef}
+        className="absolute inset-0 w-full h-full object-cover"
+        autoPlay
+        playsInline
+        muted
+      />
       
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* Preview and Analysis */}
-      {preview && (
-        <div className="space-y-4">
-          <div className="relative w-full h-64 bg-zinc-100 dark:bg-zinc-800 rounded-lg overflow-hidden">
-            <Image
-              src={preview}
-              alt="Artwork preview"
-              fill
-              className="object-contain"
-            />
-          </div>
-
-          <div className="flex gap-4">
-            <button
-              onClick={analyzeArtwork}
-              disabled={analyzing || disabled}
-              className="flex-1 py-3 px-4 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {analyzing ? '🔍 Analyzing...' : '🔍 Analyze Artwork'}
-            </button>
-            <button
-              onClick={reset}
-              disabled={analyzing || disabled}
-              className="py-3 px-4 bg-zinc-600 text-white rounded-lg font-medium hover:bg-zinc-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Reset
-            </button>
+      {/* Analyzing Overlay */}
+      {analyzing && (
+        <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-20">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
+            <p className="text-white text-lg font-medium">Analyzing artwork...</p>
           </div>
         </div>
       )}
 
-      {/* Error Display */}
+      {/* Error Message */}
       {error && (
-        <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <p className="text-red-800 dark:text-red-200 text-sm">{error}</p>
+        <div className="absolute top-4 left-4 right-4 p-4 bg-red-500/90 backdrop-blur-sm rounded-lg z-10">
+          <p className="text-white text-sm text-center">{error}</p>
         </div>
       )}
+
+      {/* Bottom Control Bar */}
+      <div className="absolute bottom-0 left-0 right-0 pb-safe">
+        <div className="bg-gradient-to-t from-black/80 via-black/50 to-transparent pt-20 pb-8 px-6">
+          <div className="flex items-center justify-between max-w-md mx-auto">
+            
+            {/* Gallery Button - Left */}
+            <button
+              onClick={openGallery}
+              disabled={disabled || analyzing}
+              className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center hover:bg-white/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Open gallery"
+            >
+              <svg 
+                className="w-7 h-7 text-white" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth={2} 
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" 
+                />
+              </svg>
+            </button>
+
+            {/* Capture Button - Center */}
+            <button
+              onClick={capturePhoto}
+              disabled={!streaming || disabled || analyzing}
+              className="w-20 h-20 rounded-full bg-white border-4 border-white/30 hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              aria-label="Capture photo"
+            >
+              <div className="w-full h-full rounded-full bg-white"></div>
+            </button>
+
+            {/* Voice Button - Right */}
+            <button
+              onClick={toggleVoiceListening}
+              disabled={disabled || analyzing}
+              className={`w-14 h-14 rounded-xl backdrop-blur-md border flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                isListening 
+                  ? 'bg-red-500/80 border-red-400/50 animate-pulse' 
+                  : 'bg-white/20 border-white/30 hover:bg-white/30'
+              }`}
+              aria-label="Voice activation"
+            >
+              <svg 
+                className="w-7 h-7 text-white" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth={2} 
+                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" 
+                />
+              </svg>
+            </button>
+          </div>
+
+          {/* Voice Listening Indicator */}
+          {isListening && (
+            <div className="mt-4 text-center">
+              <p className="text-white text-sm font-medium">🎤 Listening... Say "Which painting is this?"</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

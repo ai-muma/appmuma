@@ -2,6 +2,31 @@
 
 ## Common Issues and Solutions
 
+### Issue: Agent doesn't start speaking automatically about the artwork
+
+**Symptoms:**
+- Artwork is analyzed successfully
+- Conversation starts automatically
+- But the agent waits for you to speak first instead of talking about the artwork
+
+**Root Cause:**
+The "First message" override is not enabled in your ElevenLabs agent settings.
+
+**Solution:**
+
+1. Go to your ElevenLabs dashboard
+2. Open your agent's settings
+3. Navigate to the **"Security"** tab
+4. Find the **"Overrides"** section
+5. Enable the **"First message"** override checkbox
+6. Save your agent settings
+7. Restart the conversation in your app
+
+**Why this is needed:**
+The app sends a dynamic first message telling the agent exactly what artwork was just captured. Without this override enabled, ElevenLabs will ignore the custom message and wait for user input.
+
+---
+
 ### Issue: Agent asks to upload artwork even though it's already uploaded
 
 **Symptoms:**

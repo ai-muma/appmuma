@@ -48,8 +48,13 @@ npm install
      ```
      You are an expert art historian and educator. You help people understand and appreciate artworks through natural conversation. When provided with artwork context, discuss it enthusiastically and answer questions with depth and clarity. Be conversational, engaging, and educational.
      ```
-   - **First Message**: "Hello! I'm ready to discuss art with you. What artwork are we looking at today?"
-4. Save the agent and copy the **Agent ID**
+   - **First Message**: Leave this blank (we'll override it dynamically)
+4. **Enable First Message Override** (Important for auto-start):
+   - Go to the **"Security"** tab in your agent settings
+   - Find the **"Overrides"** section
+   - Enable the **"First message"** override option
+   - This allows the app to send a dynamic greeting about each artwork
+5. Save the agent and copy the **Agent ID**
 
 ### 4. Create Environment File
 
