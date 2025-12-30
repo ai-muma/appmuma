@@ -31,6 +31,7 @@ export default function ConversationComponent({
   const [status, setStatus] = useState<string>('Point camera at artwork');
   const [error, setError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   
   const conversationRef = useRef<Conversation | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -100,6 +101,12 @@ export default function ConversationComponent({
       ctx.drawImage(videoRef.current, 0, 0);
       const imageDataUrl = canvas.toDataURL('image/jpeg', 0.95);
       console.log('[Camera] ✅ Photo captured, size:', imageDataUrl.length, 'bytes');
+      console.log('[Camera] 📸 Storing captured image for display');
+      
+      // Store the captured image to display it
+      setCapturedImage(imageDataUrl);
+      setStatus('🔍 Analyzing artwork...');
+      
       console.log('[Camera] 🚀 Sending to analysis API...');
       
       try {
@@ -109,6 +116,7 @@ export default function ConversationComponent({
         console.error('[Camera] ❌ Analysis failed:', error);
         setError('Failed to analyze artwork');
         setStatus('Error - Try again');
+        setCapturedImage(null); // Clear image on error
       }
     } else {
       console.log('[Camera] ❌ Failed to get canvas context');
@@ -298,6 +306,7 @@ export default function ConversationComponent({
     }
     
     setIsSessionActive(false);
+    setCapturedImage(null); // Clear captured image
     setStatus('Point camera at new artwork');
     onReset();
   };
@@ -342,65 +351,76 @@ export default function ConversationComponent({
           </div>
         </div>
 
-        {/* Center - Artwork Info (when identified) */}
-        {artworkContext && (
-          <div className="flex-1 flex items-center justify-center px-6">
-            <div className="bg-emerald-500/90 backdrop-blur-md rounded-2xl p-6 border border-emerald-400 shadow-2xl max-w-md w-full">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <h2 className="text-white text-2xl font-bold mb-1">
-                    {artworkContext.name}
-                  </h2>
-                  <p className="text-white/90 text-lg">
-                    by {artworkContext.artist}
-                  </p>
-                  {artworkContext.year && artworkContext.year !== 'Unknown' && (
-                    <p className="text-white/80 text-sm mt-1">{artworkContext.year}</p>
-                  )}
-                  {artworkContext.medium && artworkContext.medium !== 'Unknown' && (
-                    <p className="text-white/80 text-sm">{artworkContext.medium}</p>
+        {/* Center - Captured Image & Artwork Info */}
+        {capturedImage && (
+          <div className="flex-1 flex flex-col items-center justify-center px-6 py-4 overflow-auto">
+            <div className="w-full max-w-md space-y-4">
+              {/* Captured Image */}
+              <div className="relative rounded-xl overflow-hidden border-4 border-white/20 shadow-2xl">
+                <img 
+                  src={capturedImage} 
+                  alt="Captured artwork" 
+                  className="w-full h-auto object-contain max-h-64"
+                />
+                {isAnalyzing && (
+                  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-5xl mb-2 animate-pulse">🔍</div>
+                      <p className="text-white font-semibold">Analyzing...</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Artwork Info (when identified) */}
+              {artworkContext && (
+                <div className="bg-emerald-500/90 backdrop-blur-md rounded-2xl p-6 border border-emerald-400 shadow-2xl animate-fade-in">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <h2 className="text-white text-2xl font-bold mb-1">
+                        {artworkContext.name}
+                      </h2>
+                      <p className="text-white/90 text-lg">
+                        by {artworkContext.artist}
+                      </p>
+                      {artworkContext.year && artworkContext.year !== 'Unknown' && (
+                        <p className="text-white/80 text-sm mt-1">{artworkContext.year}</p>
+                      )}
+                      {artworkContext.medium && artworkContext.medium !== 'Unknown' && (
+                        <p className="text-white/80 text-sm">{artworkContext.medium}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={handleReset}
+                      className="ml-4 px-3 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors text-sm font-medium"
+                    >
+                      ✕ Clear
+                    </button>
+                  </div>
+                  {artworkContext.wikiartUrl && (
+                    <a
+                      href={artworkContext.wikiartUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block mt-2 text-sm text-white/90 hover:text-white underline"
+                    >
+                      View on WikiArt →
+                    </a>
                   )}
                 </div>
-                <button
-                  onClick={handleReset}
-                  className="ml-4 px-3 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors text-sm font-medium"
-                >
-                  ✕ Clear
-                </button>
-              </div>
-              {artworkContext.wikiartUrl && (
-                <a
-                  href={artworkContext.wikiartUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block mt-2 text-sm text-white/90 hover:text-white underline"
-                >
-                  View on WikiArt →
-                </a>
               )}
             </div>
           </div>
         )}
 
-        {!artworkContext && !isAnalyzing && (
+        {/* Initial state - no photo captured yet */}
+        {!capturedImage && (
           <div className="flex-1 flex items-center justify-center px-6">
             <div className="text-center">
               <div className="text-white/60 text-lg mb-2">
                 <div className="text-6xl mb-4">🎨</div>
                 <p className="text-xl font-semibold">Point camera at artwork</p>
                 <p className="text-sm mt-2">Then tap the capture button below</p>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {!artworkContext && isAnalyzing && (
-          <div className="flex-1 flex items-center justify-center px-6">
-            <div className="text-center">
-              <div className="text-white/60 text-lg mb-2">
-                <div className="text-6xl mb-4 animate-pulse">🔍</div>
-                <p className="text-xl font-semibold">Analyzing artwork...</p>
-                <p className="text-sm mt-2">This will only take a moment</p>
               </div>
             </div>
           </div>
